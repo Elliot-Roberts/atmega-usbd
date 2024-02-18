@@ -20,7 +20,7 @@ const ENDPOINT_MAX_BUFSIZE: [u16; MAX_ENDPOINTS] = [64, 256, 64, 64, 64, 64, 64]
 const DPRAM_SIZE: u16 = 832;
 
 const EP_TYPE_CONTROL: u8 = 0b00;
-const EP_TYPE_ISOCHRONOUS: u8 = 0b01;
+// const EP_TYPE_ISOCHRONOUS: u8 = 0b01;
 const EP_TYPE_BULK: u8 = 0b10;
 const EP_TYPE_INTERRUPT: u8 = 0b11;
 
@@ -177,8 +177,11 @@ impl<S: SuspendNotifier> usb_device::bus::UsbBus for UsbBus<S> {
         // Ignore duplicate ep0 allocation by usb_device.
         // Endpoints can only be configured once, and
         // control endpoint must be configured as "OUT".
-        if ep_addr == Some(EndpointAddress::from_parts(0, UsbDirection::In)) {
-            return Ok(ep_addr.unwrap());
+        match ep_addr {
+            Some(ctrl_ep) if ctrl_ep == EndpointAddress::from_parts(0, UsbDirection::In) => {
+                return Ok(ctrl_ep)
+            }
+            _ => (),
         }
 
         let ep_addr = match ep_addr {
@@ -204,7 +207,18 @@ impl<S: SuspendNotifier> usb_device::bus::UsbBus for UsbBus<S> {
         let entry = &mut self.endpoints[ep_addr.index()];
         entry.eptype_bits = match ep_type {
             EndpointType::Control => EP_TYPE_CONTROL,
-            EndpointType::Isochronous => EP_TYPE_ISOCHRONOUS,
+
+            // TODO: Determine when isochronous endpoints are supported.
+            // I am not sure which of:
+            // - atmega processor hardware
+            // - this crate
+            // - device class crate
+            // - binary application crate
+            // decides what type of ischronous synchronization and usage types are supported.
+            // Is support different for IN vs OUT endpoints?
+            // For now simply err on the side of caution.
+            EndpointType::Isochronous { .. } => return Err(UsbError::Unsupported),
+
             EndpointType::Bulk => EP_TYPE_BULK,
             EndpointType::Interrupt => EP_TYPE_INTERRUPT,
         };
